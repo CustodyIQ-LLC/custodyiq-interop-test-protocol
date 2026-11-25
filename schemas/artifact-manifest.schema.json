@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://custodyiq.example/interop-evidence/schemas/artifact-manifest.schema.json",
+  "title": "Artifact Manifest",
+  "description": "Control B (provenance identity) manifest for a governed evidence artifact. A manifest identifies an artifact; it does not by itself establish storage immutability (Control A) or workflow eligibility (Control C).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_id",
+    "challenge_id",
+    "artifact_role",
+    "designated_authority",
+    "source_author",
+    "version",
+    "status",
+    "exposure_state"
+  ],
+  "properties": {
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable unique identifier for this artifact."
+    },
+    "challenge_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The challenge this artifact belongs to, e.g. 'challenge-01'."
+    },
+    "artifact_role": {
+      "type": "string",
+      "enum": [
+        "issuer_artifact",
+        "evidence_side_determination",
+        "consequence_side_determination",
+        "reconciliation",
+        "final_receipt",
+        "governance_artifact",
+        "non_authoritative_summary",
+        "correspondence"
+      ],
+      "description": "The artifact's governed role. Determines whether it can carry evidentiary or consequence authority."
+    },
+    "designated_authority": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The human/system authority responsible for the determination. Never an AI model on its own."
+    },
+    "source_author": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who produced the artifact bytes. May note AI assistance, which does not transfer authority."
+    },
+    "created_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When the artifact was created (RFC 3339 date-time), or null if unknown/not applicable."
+    },
+    "received_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When this repository/custodian received the artifact, or null."
+    },
+    "frozen_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When the artifact was frozen (RFC 3339 date-time). Required once status is FROZEN; otherwise may be null."
+    },
+    "sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Lowercase-hex SHA-256 of the frozen bytes. Required once status is FROZEN; null when NOT_PRESENT. Never fabricated."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Version of this artifact. Corrections increment the version or supersede."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "FINALIZED",
+        "FROZEN",
+        "SUPERSEDED",
+        "WITHDRAWN",
+        "NOT_PRESENT"
+      ],
+      "description": "Lifecycle status. NOT_PRESENT is a first-class truthful status for genuinely absent artifacts."
+    },
+    "exposure_state": {
+      "type": "string",
+      "enum": [
+        "PRE_CROSS_EXPOSURE",
+        "POST_CROSS_EXPOSURE",
+        "NOT_APPLICABLE"
+      ],
+      "description": "Cross-exposure state. POST_CROSS_EXPOSURE can never be relabeled PRE_CROSS_EXPOSURE."
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "description": "artifact_id that this artifact supersedes, or null."
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "artifact_ids this artifact references, e.g. the issuer artifact a determination was based on."
+    },
+    "artifact_file_ref": {
+      "type": ["string", "null"],
+      "description": "Repo-relative path of the file whose exact bytes sha256 covers. Binds the hash to specific content (non-substitution). Null when NOT_PRESENT or when a bundle-of-hashes method is described in the provenance record."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-text notes. Must not contain protected information (see GOVERNANCE.md)."
+    },
+    "ai_assistance": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "Optional, non-authority-granting record of AI involvement in producing this artifact.",
+      "properties": {
+        "used": { "type": "boolean" },
+        "system": { "type": "string" },
+        "role": {
+          "type": "string",
+          "description": "e.g. 'draft', 'summary', 'narration'. Never authority-bearing unless adopted via governance."
+        },
+        "adopted_by": {
+          "type": ["string", "null"],
+          "description": "designated_authority who explicitly adopted AI output, or null if not adopted. Informational only on a non_authoritative_summary; never elevates the artifact's role by itself (see GOVERNANCE.md §6)."
+        },
+        "adoption_record_ref": {
+          "type": ["string", "null"],
+          "description": "Reference to the governance adoption record. Required when adopted_by is non-null."
+        }
+      },
+      "required": ["used"],
+      "if": { "properties": { "adopted_by": { "type": "string" } }, "required": ["adopted_by"] },
+      "then": { "required": ["adoption_record_ref"], "properties": { "adoption_record_ref": { "type": "string", "minLength": 1 } } }
+    }
+  },
+  "allOf": [
+    {
+      "comment": "FROZEN artifacts must carry a freeze timestamp and a real hash.",
+      "if": { "properties": { "status": { "const": "FROZEN" } }, "required": ["status"] },
+      "then": {
+        "required": ["frozen_at", "sha256"],
+        "properties": {
+          "frozen_at": { "type": "string", "format": "date-time" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    {
+      "comment": "SUPERSEDED artifacts were previously frozen; their frozen_at and hash are retained unchanged (non-destructive supersession, PROVENANCE_RULES.md §5).",
+      "if": { "properties": { "status": { "const": "SUPERSEDED" } }, "required": ["status"] },
+      "then": {
+        "required": ["frozen_at", "sha256"],
+        "properties": {
+          "frozen_at": { "type": "string", "format": "date-time" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    {
+      "comment": "Any artifact with a non-null frozen_at must carry a real hash (e.g. WITHDRAWN of a frozen artifact cannot drop its hash).",
+      "if": { "properties": { "frozen_at": { "type": "string" } }, "required": ["frozen_at"] },
+      "then": {
+        "required": ["sha256"],
+        "properties": { "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+      }
+    },
+    {
+      "comment": "NOT_PRESENT artifacts have no bytes: no hash and no freeze timestamp may be fabricated.",
+      "if": { "properties": { "status": { "const": "NOT_PRESENT" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "sha256": { "type": "null" },
+          "frozen_at": { "type": "null" }
+        }
+      }
+    },
+    {
+      "comment": "Evidence-side and consequence-side determinations sit on the independence axis: they are PRE or POST, never NOT_APPLICABLE.",
+      "if": { "properties": { "artifact_role": { "enum": ["evidence_side_determination", "consequence_side_determination"] } }, "required": ["artifact_role"] },
+      "then": { "properties": { "exposure_state": { "enum": ["PRE_CROSS_EXPOSURE", "POST_CROSS_EXPOSURE"] } } }
+    },
+    {
+      "comment": "Reconciliation and final receipts are inherently produced after cross-exposure.",
+      "if": { "properties": { "artifact_role": { "enum": ["reconciliation", "final_receipt"] } }, "required": ["artifact_role"] },
+      "then": { "properties": { "exposure_state": { "const": "POST_CROSS_EXPOSURE" } } }
+    },
+    {
+      "comment": "Issuer and governance artifacts are not on the cross-exposure axis.",
+      "if": { "properties": { "artifact_role": { "enum": ["issuer_artifact", "governance_artifact"] } }, "required": ["artifact_role"] },
+      "then": { "properties": { "exposure_state": { "const": "NOT_APPLICABLE" } } }
+    }
+  ]
+}

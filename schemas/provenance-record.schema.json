@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://custodyiq.example/interop-evidence/schemas/provenance-record.schema.json",
+  "title": "Provenance Record",
+  "description": "Binds a frozen artifact to its hash, source references, freeze event, exposure-state history, and an honest statement of which storage controls actually apply. Provenance records are append-only in practice; a correction is a new record referencing the prior one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_id",
+    "artifact_id",
+    "challenge_id",
+    "hash_algorithm",
+    "sha256",
+    "exposure_state_history",
+    "controls",
+    "recorded_at",
+    "recorded_by"
+  ],
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this provenance record."
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The artifact_id (from the manifest) this record describes."
+    },
+    "challenge_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hash_algorithm": {
+      "type": "string",
+      "const": "sha256",
+      "description": "Only SHA-256 is used in this repository."
+    },
+    "sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Lowercase-hex SHA-256 of the frozen bytes, or null if the artifact is NOT_PRESENT. Never fabricated."
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "artifact_ids this artifact was derived from or references."
+    },
+    "artifact_file_ref": {
+      "type": ["string", "null"],
+      "description": "Repo-relative path of the file whose exact bytes sha256 covers. Binds the hash to specific content (non-substitution). Null when the artifact is NOT_PRESENT or a bundle-of-hashes method is described below."
+    },
+    "freeze_event": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "The freeze act, or null if the artifact is not (yet) frozen.",
+      "required": ["frozen_at", "frozen_by"],
+      "properties": {
+        "frozen_at": { "type": "string", "format": "date-time" },
+        "frozen_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "designated_authority who froze the artifact."
+        },
+        "method": {
+          "type": "string",
+          "description": "How the bytes were canonicalized/hashed (e.g. binary-safe, normalization applied). Supports reproducible hashing across platforms."
+        }
+      }
+    },
+    "exposure_state_history": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered history of exposure-state recordings. Preserved, never rewritten favorably.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["state", "at", "recorded_by"],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["PRE_CROSS_EXPOSURE", "POST_CROSS_EXPOSURE", "NOT_APPLICABLE"]
+          },
+          "at": { "type": "string", "format": "date-time" },
+          "recorded_by": { "type": "string", "minLength": 1 },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Honest statement of which of the three independent controls actually apply. These are separate and must not be collapsed.",
+      "required": ["storage_immutability", "provenance_identity", "workflow_eligibility"],
+      "properties": {
+        "storage_immutability": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Control A. Git presence is provenance-contributing but is NOT WORM storage.",
+          "required": ["worm_storage", "git_history_present"],
+          "properties": {
+            "worm_storage": {
+              "type": "boolean",
+              "description": "True only if genuine WORM/object-lock storage is in force. Currently false."
+            },
+            "git_history_present": {
+              "type": "boolean",
+              "description": "Whether the artifact is committed to Git. Provenance-contributing; not equivalent to WORM."
+            },
+            "storage_type": {
+              "type": ["string", "null"],
+              "description": "e.g. 'git-only', or a future immutable-store identifier. Null if unspecified."
+            }
+          }
+        },
+        "provenance_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Control B.",
+          "required": ["manifest_present"],
+          "properties": {
+            "manifest_present": { "type": "boolean" },
+            "manifest_ref": {
+              "type": ["string", "null"],
+              "description": "Path or id of the manifest, or null."
+            }
+          }
+        },
+        "workflow_eligibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Control C. Eligibility is an explicit determination, never automatic.",
+          "required": ["eligible", "determination_ref"],
+          "properties": {
+            "eligible": {
+              "type": ["boolean", "null"],
+              "description": "True/false only if an explicit eligibility determination exists; null if undetermined (default)."
+            },
+            "determination_ref": {
+              "type": ["string", "null"],
+              "description": "Reference to the governance record making the eligibility determination, or null if none."
+            }
+          }
+        }
+      }
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recorded_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who recorded this provenance record."
+    },
+    "supersedes_record": {
+      "type": ["string", "null"],
+      "description": "record_id of a prior provenance record this one corrects/replaces, or null."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-text notes. Must not contain protected information."
+    }
+  },
+  "allOf": [
+    {
+      "comment": "Control C cannot self-assert: eligible:true requires a reference to the governance eligibility determination.",
+      "if": {
+        "properties": {
+          "controls": {
+            "properties": {
+              "workflow_eligibility": {
+                "properties": { "eligible": { "const": true } },
+                "required": ["eligible"]
+              }
+            },
+            "required": ["workflow_eligibility"]
+          }
+        },
+        "required": ["controls"]
+      },
+      "then": {
+        "properties": {
+          "controls": {
+            "properties": {
+              "workflow_eligibility": {
+                "required": ["determination_ref"],
+                "properties": { "determination_ref": { "type": "string", "minLength": 1 } }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "comment": "A freeze event and a real hash are inseparable (PROVENANCE_RULES.md §3): a recorded freeze_event requires a non-null sha256.",
+      "if": { "properties": { "freeze_event": { "type": "object" } }, "required": ["freeze_event"] },
+      "then": {
+        "required": ["sha256"],
+        "properties": { "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+      }
+    },
+    {
+      "comment": "Absent bytes (sha256 null) cannot have a freeze event: no freeze may be fabricated for content that does not exist.",
+      "if": { "properties": { "sha256": { "type": "null" } }, "required": ["sha256"] },
+      "then": { "properties": { "freeze_event": { "type": "null" } } }
+    }
+  ]
+}
