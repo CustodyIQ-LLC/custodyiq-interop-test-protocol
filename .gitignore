@@ -1,0 +1,55 @@
+# Guard against accidental ingestion of secrets and protected material.
+# This is a defense-in-depth aid, NOT the primary control. The primary control is
+# authoring discipline (see GOVERNANCE.md §Protected Information). Nothing below should
+# be read as permission to place protected material anywhere in this repository.
+
+# Keys and key material
+*.pem
+*.key
+*.ppk
+*.pfx
+*.p12
+*.p8
+*.jks
+*.keystore
+*.kdbx
+*.asc
+*.gpg
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*_ed25519
+*_rsa
+*private*key*
+*deploy*key*
+
+# Credentials / secrets / environment values
+.env
+.env.*
+!.env.example
+.envrc
+*.secret
+*.secrets
+secrets.*
+credentials
+credentials.*
+*.credentials
+.netrc
+*.pgpass
+
+# Infrastructure state (may embed secrets)
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Cloud / provider credential files
+.aws/
+.azure/
+*azure*credential*
+*gcloud*credential*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
